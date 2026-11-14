@@ -48,8 +48,45 @@ jobs:
       # covers every dependency, not only the ones a pull request changes.
       enforce-lint: true
 
-  # The project's tests. The orchestrator never runs them; require this job
-  # and pr-checks as status checks.
+  # The OpenAPI backward-compatibility check of `just lint-all`
+  # (lint-openapi-diff). It needs Maven and the specification on main, which
+  # the lint gate does not have, so it has a job of its own.
+  openapi-diff:
+    name: OpenAPI compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read # Fetch dependencies from GitHub Packages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Check backward compatibility
+        env:
+          SPEC: src/main/resources/static/wallet-provider-openapi-v0.yaml
+          GITHUB_ACTOR: ${{ github.actor }}
+          PACKAGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! git cat-file -e "origin/main:$SPEC" 2>/dev/null; then
+            echo "$SPEC is not on main yet; nothing to compare with."
+            exit 0
+          fi
+          mkdir -p target
+          git show "origin/main:$SPEC" > target/openapi-diff-old.yaml
+          mvn --batch-mode --no-transfer-progress --errors -Dstyle.color=always \
+            openapi-diff:diff -Dopenapi.diff.oldSpec=target/openapi-diff-old.yaml -Dopenapi.diff.skip=false
+
+  # The project's tests. The orchestrator never runs them; require this job,
+  # openapi-diff and pr-checks as status checks.
   test:
     needs: [pr-checks]
     if: always() # Run tests even if linting fails (get complete feedback)
