@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2025 diggsweden/wallet-provider
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# Artifacts Configuration for wallet-provider
+# Defines what to build and where to publish
+
+# The container image is signed keyless with Sigstore and carries SBOM and
+# SLSA provenance attestations. The release files keep their OpenPGP .asc
+# signatures, made with the key in RELEASE_GPG_PRIVATE_KEY.
+sign:
+  method: sigstore
+  files-method: gpg
+
+# The release commit and the final tag are signed with the GPG key in
+# RELEASE_GPG_PRIVATE_KEY, as before.
+git-signing:
+  method: gpg
+
+artifacts:
+  - name: wallet-provider
+    project-type: maven
+    working-directory: .
+    # build-type is left out: the default is the application build, and an
+    # explicit `application` would take the JAR out of the forge-packages
+    # (GitHub Packages) publication below.
+    publish-to:
+      - forge-packages
+    config:
+      java-version: 25
+
+containers:
+  - name: wallet-provider
+    from: [wallet-provider]
+    container-file: Containerfile
+    context: .
+    platforms: linux/amd64,linux/arm64
